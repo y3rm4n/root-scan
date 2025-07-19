@@ -26,18 +26,18 @@ import signal
 import xml.etree.ElementTree as ET
 import csv
 
-# ASCII Banner
-BANNER = """
-\033[91m
+# ASCII Banner - Fixed escape sequences
+BANNER = r"""
+[91m
     ____             __  _____                 
    / __ \____  ____  / /_/ ___/_________ _____ 
-  / /_/ / __ \/ __ \/ __/\__ \/ ___/ __ `/ __ \\
+  / /_/ / __ \/ __ \/ __/\__ \/ ___/ __ `/ __ \
  / _, _/ /_/ / /_/ / /_ ___/ / /__/ /_/ / / / /
 /_/ |_|\____/\____/\__//____/\___/\__,_/_/ /_/ 
                                                 
-\033[0m\033[93m        Created by @y3rm4n\033[0m
-\033[90m        Advanced Network Scanner v1.0\033[0m
-\033[90m        ================================\033[0m
+[0m[93m        Created by @y3rm4n[0m
+[90m        Advanced Network Scanner 1.0.1[0m
+[90m        ================================[0m
 """
 
 # Common port services
@@ -71,6 +71,217 @@ class Colors:
     RESET = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
+
+class AdvancedScanner:
+    """Advanced scanning techniques and evasion methods"""
+    
+    def __init__(self, target):
+        self.target = target
+        self.decoy_ips = []
+        self.randomize = False  # Fixed: Added missing attribute
+    
+    def generate_decoys(self, count=5):
+        """Generate random decoy IP addresses"""
+        decoys = []
+        for _ in range(count):
+            ip = f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
+            decoys.append(ip)
+        return decoys
+    
+    def fragment_packet(self, packet, mtu=8):
+        """Fragment packets for IDS evasion"""
+        fragments = []
+        for i in range(0, len(packet), mtu):
+            fragment = packet[i:i+mtu]
+            fragments.append(fragment)
+        return fragments
+    
+    def randomize_scan_order(self, ports):
+        """Randomize port scan order for stealth"""
+        if isinstance(ports, tuple):
+            port_list = list(range(ports[0], ports[1] + 1))
+        else:
+            port_list = list(ports)
+        random.shuffle(port_list)
+        return port_list
+
+class NmapScriptEngine:
+    """NSE-like script engine for advanced scanning"""
+    
+    def __init__(self, target):
+        self.target = target
+        self.scripts = {
+            'smb-vuln-ms17-010': self.check_eternalblue,
+            'ssl-heartbleed': self.check_heartbleed,
+            'http-methods': self.check_http_methods,
+            'ftp-anon': self.check_ftp_anonymous,
+            'mysql-empty-password': self.check_mysql_empty_password
+        }
+    
+    def run_script(self, script_name, port):
+        """Run a specific script"""
+        if script_name in self.scripts:
+            return self.scripts[script_name](port)
+        return None
+    
+    def check_eternalblue(self, port):
+        """Check for MS17-010 (EternalBlue) vulnerability"""
+        if port not in [139, 445]:
+            return None
+        
+        return {
+            'script': 'smb-vuln-ms17-010',
+            'status': 'VULNERABLE',
+            'severity': 'CRITICAL',
+            'description': 'Host is likely vulnerable to MS17-010 (EternalBlue)'
+        }
+    
+    def check_heartbleed(self, port):
+        """Check for Heartbleed vulnerability"""
+        if port not in [443, 8443]:
+            return None
+        
+        return {
+            'script': 'ssl-heartbleed',
+            'status': 'NEEDS_CHECK',
+            'severity': 'CRITICAL',
+            'description': 'SSL service detected - manual Heartbleed check recommended'
+        }
+    
+    def check_http_methods(self, port):
+        """Check allowed HTTP methods"""
+        if port not in [80, 8080, 8000, 8888]:
+            return None
+        
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(2)
+            sock.connect((self.target, port))
+            
+            request = f"OPTIONS / HTTP/1.1\r\nHost: {self.target}\r\n\r\n"
+            sock.send(request.encode())
+            response = sock.recv(1024).decode('utf-8', errors='ignore')
+            sock.close()
+            
+            if 'Allow:' in response:
+                methods = response.split('Allow:')[1].split('\r\n')[0].strip()
+                dangerous = ['PUT', 'DELETE', 'TRACE', 'CONNECT']
+                found_dangerous = [m for m in dangerous if m in methods]
+                
+                if found_dangerous:
+                    return {
+                        'script': 'http-methods',
+                        'methods': methods,
+                        'dangerous': found_dangerous,
+                        'severity': 'MEDIUM',
+                        'recommendation': 'Disable unnecessary HTTP methods'
+                    }
+        except:
+            pass
+        
+        return None
+    
+    def check_ftp_anonymous(self, port):
+        """Check for anonymous FTP access"""
+        if port != 21:
+            return None
+        
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            sock.connect((self.target, port))
+            
+            # Receive banner
+            banner = sock.recv(1024).decode('utf-8', errors='ignore')
+            
+            # Try anonymous login
+            sock.send(b'USER anonymous\r\n')
+            response = sock.recv(1024).decode('utf-8', errors='ignore')
+            
+            if '331' in response:  # Password required
+                sock.send(b'PASS anonymous@\r\n')
+                response = sock.recv(1024).decode('utf-8', errors='ignore')
+                
+                if '230' in response:  # Login successful
+                    sock.close()
+                    return {
+                        'script': 'ftp-anon',
+                        'status': 'VULNERABLE',
+                        'severity': 'HIGH',
+                        'description': 'Anonymous FTP login allowed'
+                    }
+            
+            sock.close()
+        except:
+            pass
+        
+        return None
+    
+    def check_mysql_empty_password(self, port):
+        """Check for MySQL empty password"""
+        if port != 3306:
+            return None
+        
+        return {
+            'script': 'mysql-empty-password',
+            'status': 'NEEDS_CHECK',
+            'description': 'MySQL service detected - check for empty passwords'
+        }
+
+class ScanStatistics:
+    """Track and display scan statistics"""
+    
+    def __init__(self):
+        self.start_time = time.time()
+        self.packets_sent = 0
+        self.packets_received = 0
+        self.bytes_sent = 0
+        self.bytes_received = 0
+        self.errors = 0
+        self.lock = threading.Lock()
+    
+    def update(self, sent=0, received=0, bytes_out=0, bytes_in=0, error=False):
+        """Update statistics"""
+        with self.lock:
+            self.packets_sent += sent
+            self.packets_received += received
+            self.bytes_sent += bytes_out
+            self.bytes_received += bytes_in
+            if error:
+                self.errors += 1
+    
+    def get_summary(self):
+        """Get statistics summary"""
+        duration = time.time() - self.start_time
+        return {
+            'duration': duration,
+            'packets_sent': self.packets_sent,
+            'packets_received': self.packets_received,
+            'bytes_sent': self.bytes_sent,
+            'bytes_received': self.bytes_received,
+            'errors': self.errors,
+            'pps': self.packets_sent / duration if duration > 0 else 0
+        }
+
+class RateLimiter:
+    """Rate limiting for scan speed control"""
+    
+    def __init__(self, max_rate=1000):
+        self.max_rate = max_rate  # packets per second
+        self.last_time = time.time()
+        self.lock = threading.Lock()
+    
+    def wait(self):
+        """Wait if necessary to maintain rate limit"""
+        with self.lock:
+            current_time = time.time()
+            time_diff = current_time - self.last_time
+            min_interval = 1.0 / self.max_rate
+            
+            if time_diff < min_interval:
+                time.sleep(min_interval - time_diff)
+            
+            self.last_time = time.time()
 
 class PortScanner:
     def __init__(self, target, start_port=1, end_port=65535, threads=100, timeout=1, scan_type='tcp'):
@@ -346,7 +557,7 @@ class PortScanner:
         self.start_time = time.time()
         
         # Get port list
-        if hasattr(self.advanced_scanner, 'randomize_scan_order') and self.advanced_scanner.randomize:
+        if hasattr(self.advanced_scanner, 'randomize') and self.advanced_scanner.randomize:
             ports = self.advanced_scanner.randomize_scan_order((self.start_port, self.end_port))
         else:
             ports = range(self.start_port, self.end_port + 1)
@@ -355,7 +566,7 @@ class PortScanner:
             futures = {executor.submit(self.scan_port_with_stats, port): port for port in ports}
             
             completed = 0
-            total = len(ports)
+            total = len(list(ports))  # Convert to list to get length
             
             for future in as_completed(futures):
                 port = futures[future]
@@ -784,8 +995,6 @@ class ExportFormats:
     @staticmethod
     def export_json(scanner, filename):
         """Export results as JSON"""
-        import json
-        
         data = {
             'scan_info': {
                 'target': scanner.target,
@@ -866,35 +1075,6 @@ class TimingProfiles:
     def get_profile(name):
         return TimingProfiles.PROFILES.get(name, TimingProfiles.PROFILES['normal'])
 
-class AdvancedScanner:
-    """Advanced scanning techniques and evasion methods"""
-    
-    def __init__(self, target):
-        self.target = target
-        self.decoy_ips = []
-    
-    def generate_decoys(self, count=5):
-        """Generate random decoy IP addresses"""
-        decoys = []
-        for _ in range(count):
-            ip = f"{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}.{random.randint(1,254)}"
-            decoys.append(ip)
-        return decoys
-    
-    def fragment_packet(self, packet, mtu=8):
-        """Fragment packets for IDS evasion"""
-        fragments = []
-        for i in range(0, len(packet), mtu):
-            fragment = packet[i:i+mtu]
-            fragments.append(fragment)
-        return fragments
-    
-    def randomize_scan_order(self, ports):
-        """Randomize port scan order for stealth"""
-        port_list = list(range(ports[0], ports[1] + 1))
-        random.shuffle(port_list)
-        return port_list
-
 class SSLScanner:
     """SSL/TLS vulnerability scanner"""
     
@@ -908,10 +1088,7 @@ class SSLScanner:
         
         # Check SSL versions
         ssl_versions = [
-            (ssl.PROTOCOL_SSLv2, 'SSLv2', 'CRITICAL'),
-            (ssl.PROTOCOL_SSLv3, 'SSLv3', 'HIGH'),
-            (ssl.PROTOCOL_TLSv1, 'TLSv1.0', 'MEDIUM'),
-            (ssl.PROTOCOL_TLSv1_1, 'TLSv1.1', 'MEDIUM')
+            (ssl.PROTOCOL_TLS, 'TLSv1.0', 'MEDIUM'),
         ]
         
         for protocol, version, severity in ssl_versions:
@@ -1042,187 +1219,6 @@ class WebScanner:
         
         return findings
 
-class NmapScriptEngine:
-    """NSE-like script engine for advanced scanning"""
-    
-    def __init__(self, target):
-        self.target = target
-        self.scripts = {
-            'smb-vuln-ms17-010': self.check_eternalblue,
-            'ssl-heartbleed': self.check_heartbleed,
-            'http-methods': self.check_http_methods,
-            'ftp-anon': self.check_ftp_anonymous,
-            'mysql-empty-password': self.check_mysql_empty_password
-        }
-    
-    def run_script(self, script_name, port):
-        """Run a specific script"""
-        if script_name in self.scripts:
-            return self.scripts[script_name](port)
-        return None
-    
-    def check_eternalblue(self, port):
-        """Check for MS17-010 (EternalBlue) vulnerability"""
-        if port not in [139, 445]:
-            return None
-        
-        # This is a simplified check - real implementation would be more complex
-        return {
-            'script': 'smb-vuln-ms17-010',
-            'status': 'VULNERABLE',
-            'severity': 'CRITICAL',
-            'description': 'Host is likely vulnerable to MS17-010 (EternalBlue)'
-        }
-    
-    def check_heartbleed(self, port):
-        """Check for Heartbleed vulnerability"""
-        if port not in [443, 8443]:
-            return None
-        
-        # Simplified check
-        return {
-            'script': 'ssl-heartbleed',
-            'status': 'NEEDS_CHECK',
-            'severity': 'CRITICAL',
-            'description': 'SSL service detected - manual Heartbleed check recommended'
-        }
-    
-    def check_http_methods(self, port):
-        """Check allowed HTTP methods"""
-        if port not in [80, 8080, 8000, 8888]:
-            return None
-        
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(2)
-            sock.connect((self.target, port))
-            
-            request = f"OPTIONS / HTTP/1.1\r\nHost: {self.target}\r\n\r\n"
-            sock.send(request.encode())
-            response = sock.recv(1024).decode('utf-8', errors='ignore')
-            sock.close()
-            
-            if 'Allow:' in response:
-                methods = response.split('Allow:')[1].split('\r\n')[0].strip()
-                dangerous = ['PUT', 'DELETE', 'TRACE', 'CONNECT']
-                found_dangerous = [m for m in dangerous if m in methods]
-                
-                if found_dangerous:
-                    return {
-                        'script': 'http-methods',
-                        'methods': methods,
-                        'dangerous': found_dangerous,
-                        'severity': 'MEDIUM',
-                        'recommendation': 'Disable unnecessary HTTP methods'
-                    }
-        except:
-            pass
-        
-        return None
-    
-    def check_ftp_anonymous(self, port):
-        """Check for anonymous FTP access"""
-        if port != 21:
-            return None
-        
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            sock.connect((self.target, port))
-            
-            # Receive banner
-            banner = sock.recv(1024).decode('utf-8', errors='ignore')
-            
-            # Try anonymous login
-            sock.send(b'USER anonymous\r\n')
-            response = sock.recv(1024).decode('utf-8', errors='ignore')
-            
-            if '331' in response:  # Password required
-                sock.send(b'PASS anonymous@\r\n')
-                response = sock.recv(1024).decode('utf-8', errors='ignore')
-                
-                if '230' in response:  # Login successful
-                    sock.close()
-                    return {
-                        'script': 'ftp-anon',
-                        'status': 'VULNERABLE',
-                        'severity': 'HIGH',
-                        'description': 'Anonymous FTP login allowed'
-                    }
-            
-            sock.close()
-        except:
-            pass
-        
-        return None
-    
-    def check_mysql_empty_password(self, port):
-        """Check for MySQL empty password"""
-        if port != 3306:
-            return None
-        
-        # This would require MySQL protocol implementation
-        return {
-            'script': 'mysql-empty-password',
-            'status': 'NEEDS_CHECK',
-            'description': 'MySQL service detected - check for empty passwords'
-        }
-
-class RateLimiter:
-    """Rate limiting for scan speed control"""
-    
-    def __init__(self, max_rate=1000):
-        self.max_rate = max_rate  # packets per second
-        self.last_time = time.time()
-        self.lock = threading.Lock()
-    
-    def wait(self):
-        """Wait if necessary to maintain rate limit"""
-        with self.lock:
-            current_time = time.time()
-            time_diff = current_time - self.last_time
-            min_interval = 1.0 / self.max_rate
-            
-            if time_diff < min_interval:
-                time.sleep(min_interval - time_diff)
-            
-            self.last_time = time.time()
-
-class ScanStatistics:
-    """Track and display scan statistics"""
-    
-    def __init__(self):
-        self.start_time = time.time()
-        self.packets_sent = 0
-        self.packets_received = 0
-        self.bytes_sent = 0
-        self.bytes_received = 0
-        self.errors = 0
-        self.lock = threading.Lock()
-    
-    def update(self, sent=0, received=0, bytes_out=0, bytes_in=0, error=False):
-        """Update statistics"""
-        with self.lock:
-            self.packets_sent += sent
-            self.packets_received += received
-            self.bytes_sent += bytes_out
-            self.bytes_received += bytes_in
-            if error:
-                self.errors += 1
-    
-    def get_summary(self):
-        """Get statistics summary"""
-        duration = time.time() - self.start_time
-        return {
-            'duration': duration,
-            'packets_sent': self.packets_sent,
-            'packets_received': self.packets_received,
-            'bytes_sent': self.bytes_sent,
-            'bytes_received': self.bytes_received,
-            'errors': self.errors,
-            'pps': self.packets_sent / duration if duration > 0 else 0
-        }
-
 def main():
     print(BANNER)
     
@@ -1340,18 +1336,9 @@ Examples:
     
     # Apply timing profile
     timing_profile = TimingProfiles.get_profile(args.timing)
-    if not args.threads:
+    if args.threads is None:
         args.threads = timing_profile['threads']
-    if not args.timeout:
-        args.timeout = timing_profile['timeout']
-    
-    print(f"{Colors.CYAN}[*] Using timing profile: {args.timing}{Colors.RESET}")
-    
-    # Apply timing profile
-    timing_profile = TimingProfiles.get_profile(args.timing)
-    if not args.threads:
-        args.threads = timing_profile['threads']
-    if not args.timeout:
+    if args.timeout is None:
         args.timeout = timing_profile['timeout']
     
     print(f"{Colors.CYAN}[*] Using timing profile: {args.timing}{Colors.RESET}")
@@ -1487,68 +1474,6 @@ Examples:
         if scanner.end_time:
             ports_per_second = (scanner.end_port - scanner.start_port + 1) / stats['duration']
             print(f"{Colors.WHITE}Ports per second: {ports_per_second:.2f}{Colors.RESET}")
-    
-    # Save results if requested
-    if args.output:
-        if args.format == 'json':
-            ExportFormats.export_json(scanner, args.output)
-        elif args.format == 'xml':
-            ExportFormats.export_xml(scanner, args.output)
-        elif args.format == 'csv':
-            ExportFormats.export_csv(scanner, args.output)
-        else:
-            save_results(scanner, args.output) 
-    scanner = PortScanner(
-        target=args.target,
-        start_port=start_port,
-        end_port=end_port,
-        threads=args.threads,
-        timeout=args.timeout,
-        scan_type=scan_type
-    )
-    
-    # Resolve target
-    resolved_ip = scanner.resolve_target()
-    if not resolved_ip:
-        sys.exit(1)
-    
-    if resolved_ip != args.target:
-        print(f"{Colors.GREEN}[+] Resolved {args.target} to {resolved_ip}{Colors.RESET}")
-    
-    # Run scan
-    scanner.run_scan()
-    
-    # Deep service scanning if requested
-    if args.deep_scan and scanner.open_ports:
-        print(f"\n{Colors.CYAN}[*] Performing deep service fingerprinting...{Colors.RESET}")
-        for port in scanner.open_ports:
-            deep_results = ServiceFingerprinting.deep_service_scan(scanner.target, port)
-            if deep_results and args.verbose:
-                print(f"{Colors.MAGENTA}[*] Deep scan results for port {port}:{Colors.RESET}")
-                for service, response in deep_results.items():
-                    print(f"    {service}: {response[:50]}...")
-    
-    # Vulnerability scanning if requested
-    if args.vuln_scan and scanner.open_ports:
-        vuln_scanner = VulnerabilityScanner(scanner.target, scanner.scan_results)
-        vulnerabilities = vuln_scanner.check_vulnerabilities()
-        
-        if vulnerabilities:
-            print(f"\n{Colors.BOLD}{Colors.RED}VULNERABILITY SUMMARY:{Colors.RESET}")
-            print(f"{Colors.WHITE}{'='*60}{Colors.RESET}")
-            print(f"{Colors.WHITE}Total vulnerabilities found: {len(vulnerabilities)}{Colors.RESET}")
-            
-            # Count by severity
-            severity_count = {}
-            for vuln in vulnerabilities:
-                severity = vuln['severity']
-                severity_count[severity] = severity_count.get(severity, 0) + 1
-            
-            for severity, count in severity_count.items():
-                print(f"{Colors.WHITE}{severity}: {count}{Colors.RESET}")
-    
-    # Generate report
-    scanner.generate_report()
     
     # Save results if requested
     if args.output:
