@@ -1,10 +1,11 @@
 # RootScan - Advanced Network Port Scanner
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.0-brightgreen.svg" alt="Version">
+  <img src="https://img.shields.io/badge/version-1.0.4-brightgreen.svg" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-red.svg" alt="License">
   <img src="https://img.shields.io/badge/creator-%40y3rm4n-purple.svg" alt="Creator">
+  <img src="https://img.shields.io/badge/commands-83%2B-orange.svg" alt="Commands">
 </p>
 
 ```
@@ -15,7 +16,7 @@
 /_/ |_|\____/\____/\__//____/\___/\__,_/_/ /_/ 
                                                 
         Created by @y3rm4n
-        Advanced Network Scanner v1.0.1
+        Advanced Network Scanner v1.0.4 (FIXED)
 ```
 
 ## 🎯 Features
@@ -23,19 +24,18 @@
 - **Multiple Scan Types**: TCP Connect, SYN Stealth, UDP, XMAS, FIN, NULL
 - **Network Discovery**: Ping sweep, ARP scan, OS detection
 - **Vulnerability Detection**: Built-in vulnerability scanner for common services
-- **SSL/TLS Analysis**: Detect SSL/TLS vulnerabilities and misconfigurations
-- **Web Security Scanning**: Identify common web application vulnerabilities
 - **Service Fingerprinting**: Advanced banner grabbing and service detection
-- **IDS Evasion**: Decoy addresses, packet fragmentation, timing control
-- **Performance Control**: Timing profiles from paranoid to insane
+- **Performance Control**: 6 timing profiles from paranoid to insane
+- **Stealth Features**: Randomization, rate limiting, thread control
+- **NSE-like Scripts**: 5 extensible scripts for vulnerability checks
 - **Multiple Output Formats**: TXT, JSON, XML, CSV
-- **NSE-like Scripts**: Extensible script engine for custom checks
+- **83+ Command Combinations**: Comprehensive testing capabilities
 
 ## 📋 Requirements
 
 - Python 3.8 or higher
 - Linux/Unix operating system (recommended)
-- Root/sudo privileges (required for SYN scan and some features)
+- Root/sudo privileges (required for SYN scan and ARP scan)
 - Network connectivity
 
 ## 🚀 Installation
@@ -74,13 +74,13 @@ Some features require additional system packages:
 ```bash
 # Debian/Ubuntu
 sudo apt-get update
-sudo apt-get install -y nmap arp-scan tcpdump libpcap-dev
+sudo apt-get install -y arp-scan
 
 # CentOS/RHEL/Fedora
-sudo yum install -y nmap arp-scan tcpdump libpcap-devel
+sudo yum install -y arp-scan
 
 # Arch Linux
-sudo pacman -S nmap arp-scan tcpdump libpcap
+sudo pacman -S arp-scan
 ```
 
 ### 4. Make Executable (Optional)
@@ -89,9 +89,59 @@ sudo pacman -S nmap arp-scan tcpdump libpcap
 chmod +x rootscan.py
 ```
 
+## 📚 Complete Command Reference
+
+### **Basic Arguments**
+```bash
+-t, --target          # Target IP/hostname (required except --arp-scan)
+-p, --ports           # Port range: 1-1000, 80,443,8080 [default: 1-1000]
+-T, --threads         # Number of threads [default: 100]
+--timeout             # Socket timeout in seconds [default: 1.0]
+```
+
+### **Scan Types**
+```bash
+-sT, --tcp-scan       # TCP Connect scan (default)
+-sS, --syn-scan       # TCP SYN scan (requires root)
+-sU, --udp-scan       # UDP scan
+-sX, --xmas-scan      # XMAS scan (experimental)
+-sF, --fin-scan       # FIN scan (experimental)
+-sN, --null-scan      # NULL scan (experimental)
+```
+
+### **Network Discovery**
+```bash
+--ping-sweep          # Ping sweep on network range
+--arp-scan            # ARP scan on local network (requires root)
+-i, --interface       # Network interface for ARP scan [default: eth0]
+--os-detect           # OS detection based on TTL values
+```
+
+### **Security Analysis**
+```bash
+--vuln-scan           # Built-in vulnerability scanner
+--scripts             # NSE-like scripts (space-separated list)
+```
+
+### **Performance Control**
+```bash
+--timing              # Timing profile: paranoid, sneaky, polite, normal, aggressive, insane
+--rate-limit          # Maximum packets per second
+--randomize           # Randomize port scan order
+--top-ports           # Scan top N most common ports
+```
+
+### **Output and Reporting**
+```bash
+-o, --output          # Save results to file
+--format              # Output format: txt, json, xml, csv [default: txt]
+-v, --verbose         # Verbose output
+--stats               # Show detailed statistics
+```
+
 ## 🔧 Usage Examples
 
-### Basic Scanning
+### **Basic Scanning**
 
 ```bash
 # Basic TCP scan
@@ -107,20 +157,23 @@ python3 rootscan.py -t 192.168.1.1 -p 1-1000
 python3 rootscan.py -t example.com --top-ports 100
 ```
 
-### Advanced Scanning
+### **Advanced Scanning**
 
 ```bash
 # SYN stealth scan (requires root)
 sudo python3 rootscan.py -t example.com -sS
 
 # UDP scan
-sudo python3 rootscan.py -t 192.168.1.1 -sU -p 53,67,123,161
+python3 rootscan.py -t 192.168.1.1 -sU -p 53,67,123,161
+
+# XMAS scan (experimental)
+python3 rootscan.py -t 192.168.1.1 -sX
 
 # Combined TCP and vulnerability scan
-python3 rootscan.py -t example.com --vuln-scan --deep-scan
+python3 rootscan.py -t example.com --vuln-scan -v
 ```
 
-### Network Discovery
+### **Network Discovery**
 
 ```bash
 # Ping sweep
@@ -133,39 +186,36 @@ sudo python3 rootscan.py --arp-scan -i eth0
 python3 rootscan.py -t 192.168.1.1 --os-detect
 ```
 
-### Security Assessment
+### **Security Assessment**
 
 ```bash
 # Full vulnerability assessment
-python3 rootscan.py -t example.com --vuln-scan --ssl-scan --web-scan
-
-# SSL/TLS vulnerability scan
-python3 rootscan.py -t example.com -p 443,8443 --ssl-scan
-
-# Web application security scan
-python3 rootscan.py -t example.com -p 80,443,8080 --web-scan
+python3 rootscan.py -t example.com --vuln-scan --os-detect
 
 # Run specific vulnerability scripts
 python3 rootscan.py -t 192.168.1.1 --scripts smb-vuln-ms17-010 ssl-heartbleed
+
+# Multiple scripts
+python3 rootscan.py -t 192.168.1.1 --scripts smb-vuln-ms17-010 http-methods ftp-anon
 ```
 
-### Stealth and Evasion
+### **Stealth and Evasion**
 
 ```bash
-# Stealth scan with decoys
-sudo python3 rootscan.py -t example.com -sS --decoy 5 --randomize
+# Stealth scan with randomization
+sudo python3 rootscan.py -t example.com -sS --randomize
 
-# Slow scan with timing control
+# Slow scan with stealth timing
 python3 rootscan.py -t example.com --timing sneaky
 
 # Rate-limited scan
 python3 rootscan.py -t example.com --rate-limit 10
 
-# Fragment packets for IDS evasion
-sudo python3 rootscan.py -t example.com -sS --fragment
+# Complete stealth combination
+sudo python3 rootscan.py -t example.com -sS --timing paranoid --randomize --rate-limit 1
 ```
 
-### Output and Reporting
+### **Output and Reporting**
 
 ```bash
 # Save results to file
@@ -184,47 +234,104 @@ python3 rootscan.py -t example.com -o results.csv --format csv
 python3 rootscan.py -t example.com -v --stats
 ```
 
-### Complete Examples
+### **Complete Examples**
 
 ```bash
 # Production web server assessment
 python3 rootscan.py -t webserver.com -p 80,443,8080,8443 \
-  --vuln-scan --ssl-scan --web-scan --deep-scan \
+  --vuln-scan --scripts http-methods ssl-heartbleed \
   -o webserver_audit.json --format json -v
 
-# Internal network scan
-sudo python3 rootscan.py -t 192.168.1.0/24 --ping-sweep
-sudo python3 rootscan.py -t 192.168.1.1-50 -sS --top-ports 1000 \
-  --os-detect --timing aggressive
+# Internal network discovery and scan
+python3 rootscan.py -t 192.168.1.0/24 --ping-sweep
+sudo python3 rootscan.py --arp-scan
+sudo python3 rootscan.py -t 192.168.1.1 -sS --top-ports 1000 --os-detect
 
 # Stealth reconnaissance
-sudo python3 rootscan.py -t target.com -sS -p 22,80,443,3306,3389 \
-  --decoy 10 --randomize --timing paranoid --fragment
+sudo python3 rootscan.py -t target.com -sS --top-ports 50 \
+  --timing sneaky --randomize -v
 
 # Full security audit
-sudo python3 rootscan.py -t target.com -p 1-10000 \
-  --vuln-scan --ssl-scan --web-scan --deep-scan \
-  --scripts smb-vuln-ms17-010 ftp-anon mysql-empty-password \
-  --os-detect --timing normal -o full_audit.json --format json \
+python3 rootscan.py -t target.com --top-ports 1000 \
+  --vuln-scan --scripts smb-vuln-ms17-010 ssl-heartbleed http-methods ftp-anon mysql-empty-password \
+  --os-detect --timing normal --randomize \
+  -o full_audit_$(date +%Y%m%d).json --format json \
   --stats -v
 ```
 
 ## ⚡ Timing Profiles
 
-- **paranoid**: 5s timeout, 2s delay, 1 thread
-- **sneaky**: 3s timeout, 1s delay, 5 threads
-- **polite**: 2s timeout, 0.5s delay, 10 threads
-- **normal**: 1s timeout, 0.1s delay, 50 threads (default)
-- **aggressive**: 0.5s timeout, 0.05s delay, 100 threads
-- **insane**: 0.3s timeout, no delay, 200 threads
+| Profile | Timeout | Delay | Threads | Use Case |
+|---------|---------|-------|---------|----------|
+| **paranoid** | 5s | 2s | 1 | Maximum stealth, very slow |
+| **sneaky** | 3s | 1s | 5 | High stealth, slow |
+| **polite** | 2s | 0.5s | 10 | Polite scanning |
+| **normal** | 1s | 0.1s | 50 | Default, balanced |
+| **aggressive** | 0.5s | 0.05s | 100 | Fast scanning |
+| **insane** | 0.3s | 0s | 200 | Maximum speed |
 
 ## 🛡️ Available Scripts
 
-- `smb-vuln-ms17-010`: Check for EternalBlue vulnerability
-- `ssl-heartbleed`: Check for Heartbleed vulnerability
-- `http-methods`: Enumerate HTTP methods
-- `ftp-anon`: Check for anonymous FTP access
-- `mysql-empty-password`: Check for MySQL empty passwords
+| Script | Target Ports | Description |
+|--------|--------------|-------------|
+| `smb-vuln-ms17-010` | 139, 445 | Check for EternalBlue vulnerability |
+| `ssl-heartbleed` | 443, 8443 | Check for Heartbleed vulnerability |
+| `http-methods` | 80, 443, 8080, 8443, 8000, 8888 | Enumerate HTTP methods |
+| `ftp-anon` | 21 | Check for anonymous FTP access |
+| `mysql-empty-password` | 3306 | Check for MySQL empty passwords |
+
+## 📊 Port Categories
+
+### **Top Ports Lists**
+- **Top 10**: 21, 22, 23, 25, 80, 110, 139, 443, 445, 3389
+- **Top 20**: Adds 53, 111, 135, 143, 993, 995, 1723, 3306, 5900, 8080
+- **Top 50**: Extended with additional common services
+- **Top 100**: Comprehensive common port list
+- **Top 1000**: All common ports plus extended range
+
+## 🎯 Service-Specific Commands
+
+### **Web Services**
+```bash
+python3 rootscan.py -t target.com -p 80,443,8080,8443 --scripts http-methods
+```
+
+### **Database Services**
+```bash
+python3 rootscan.py -t target.com -p 3306,5432,1433,1521 --scripts mysql-empty-password
+```
+
+### **File Services**
+```bash
+python3 rootscan.py -t target.com -p 21,22,139,445 --scripts ftp-anon smb-vuln-ms17-010
+```
+
+### **Mail Services**
+```bash
+python3 rootscan.py -t target.com -p 25,110,143,993,995
+```
+
+### **SSL/TLS Services**
+```bash
+python3 rootscan.py -t target.com -p 443,993,995,8443 --scripts ssl-heartbleed
+```
+
+## ⚠️ Important Notes
+
+### **Root Privileges Required For:**
+- SYN scan (`-sS`, `--syn-scan`)
+- ARP scan (`--arp-scan`)
+
+### **Experimental Features:**
+- XMAS scan (`-sX`) - Falls back to TCP Connect
+- FIN scan (`-sF`) - Falls back to TCP Connect  
+- NULL scan (`-sN`) - Falls back to TCP Connect
+
+### **Performance Recommendations:**
+- Use `--timing normal` for balanced performance
+- Use `--rate-limit` for network-sensitive environments
+- Use `--randomize` for stealth scanning
+- Adjust `--threads` based on system capabilities
 
 ## ⚠️ Legal Disclaimer
 
@@ -240,12 +347,13 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 👨‍💻 Author
 
-**Created by @y3rm4n**
+**Created by @y3rm4n**  
+**Fixed and Enhanced by Claude**
 
 ## 🙏 Acknowledgments
 
 - Inspired by Nmap and other network scanning tools
-
+- Thanks to the security community for vulnerability research
 
 ## 📞 Support
 
@@ -254,3 +362,11 @@ For issues, questions, or contributions, please open an issue on GitHub.
 ---
 
 **Remember**: Always ensure you have explicit permission to scan any network or system. Unauthorized scanning may be illegal in your jurisdiction.
+
+### 🔢 Quick Stats
+- **Total Commands**: 83+ combinations
+- **Scan Types**: 6 different types
+- **Scripts**: 5 built-in vulnerability scripts
+- **Output Formats**: 4 formats (TXT, JSON, XML, CSV)
+- **Timing Profiles**: 6 performance levels
+- **Port Lists**: 5 predefined common port sets
