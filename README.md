@@ -16,7 +16,7 @@
 /_/ |_|\____/\____/\__//____/\___/\__,_/_/ /_/ 
                                                 
         Created by @y3rm4n
-        Advanced Network Scanner v1.0.4 (FIXED)
+        Advanced Network Scanner v1.0.4 
 ```
 
 ## 🎯 Features
