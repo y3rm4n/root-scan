@@ -54,12 +54,16 @@ PORT_SERVICES = {
     1433: 'MSSQL', 1434: 'MSSQL-UDP', 1521: 'Oracle', 1723: 'PPTP',
     2049: 'NFS', 2082: 'cPanel', 2083: 'cPanel-SSL', 2086: 'WHM',
     2087: 'WHM-SSL', 2121: 'FTP', 2222: 'SSH', 3128: 'Squid', 3306: 'MySQL',
-    3389: 'RDP', 3690: 'SVN', 4444: 'Metasploit', 5060: 'SIP', 5432: 'PostgreSQL',
-    5555: 'Android-ADB', 5900: 'VNC', 5984: 'CouchDB', 6379: 'Redis',
-    6666: 'IRC', 6667: 'IRC', 7000: 'Cassandra', 8000: 'HTTP-Alt', 8008: 'HTTP-Alt',
-    8080: 'HTTP-Proxy', 8081: 'HTTP-Alt', 8443: 'HTTPS-Alt', 8888: 'HTTP-Alt',
-    9000: 'PHP-FPM', 9090: 'Prometheus', 9200: 'Elasticsearch', 9300: 'Elasticsearch',
-    10000: 'Webmin', 11211: 'Memcached', 27017: 'MongoDB'
+    3389: 'RDP', 3690: 'SVN', 4444: 'Metasploit', 5000: 'UPnP', 5060: 'SIP',
+    5061: 'SIPS', 5432: 'PostgreSQL', 5555: 'Android-ADB', 5601: 'Kibana',
+    5900: 'VNC', 5984: 'CouchDB', 6379: 'Redis', 6666: 'IRC', 6667: 'IRC',
+    7000: 'Cassandra', 8000: 'HTTP-Alt', 8008: 'HTTP-Alt', 8080: 'HTTP-Proxy',
+    8081: 'HTTP-Alt', 8088: 'RadanHTTP', 8443: 'HTTPS-Alt', 8888: 'HTTP-Alt',
+    9000: 'PHP-FPM', 9042: 'Cassandra', 9090: 'Prometheus', 9200: 'Elasticsearch',
+    9300: 'Elasticsearch', 10000: 'Webmin', 11211: 'Memcached', 15672: 'RabbitMQ',
+    16379: 'Redis', 27017: 'MongoDB', 27018: 'MongoDB', 28017: 'MongoDB-HTTP',
+    32400: 'Plex', 47808: 'BACnet', 49152: 'Supervisor', 50000: 'SAP', 
+    50070: 'Hadoop', 50030: 'Hadoop', 60000: 'DeepFreeze'
 }
 
 class Colors:
