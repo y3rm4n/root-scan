@@ -12,18 +12,6 @@
   <img src="https://img.shields.io/badge/commands-100%2B-orange.svg" alt="Commands">
 </p>
 
-
-```
-    ____             __  _____                 
-   / __ \____  ____  / /_/ ___/_________ _____ 
-  / /_/ / __ \/ __ \/ __/\__ \/ ___/ __ `/ __ \
- / _, _/ /_/ / /_/ / /_ ___/ / /__/ /_/ / / / /
-/_/ |_|\____/\____/\__//____/\___/\__,_/_/ /_/ 
-                                                
-        Created by @y3rm4n
-        Advanced Network Scanner v1.0.5 
-```
-
 ## 🚀 Key Features
 
 - **🎯 Multiple Scan Types**: TCP Connect, SYN Stealth, UDP, XMAS, FIN, NULL
