@@ -6,12 +6,8 @@
   <img src="https://img.shields.io/badge/license-MIT-red.svg" alt="License">
   <img src="https://img.shields.io/badge/creator-%40y3rm4n-purple.svg" alt="Creator">
   <img src="https://img.shields.io/badge/commands-100%2B-orange.svg" alt="Commands">
-  <img src="https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-lightgrey.svg" alt="Platform">
 </p>
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/y3rm4n/root-scan/main/assets/banner.png" alt="RootScan Banner" width="600">
-</p>
 
 ```
     ____             __  _____                 
