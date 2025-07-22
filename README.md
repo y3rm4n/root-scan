@@ -1,6 +1,10 @@
 # RootScan - Advanced Network Port Scanner
 
 <p align="center">
+  <img src="logo/logo.png" alt="RootScan Logo" width="400">
+</p>
+
+<p align="center">
   <img src="https://img.shields.io/badge/version-1.0.5-brightgreen.svg" alt="Version">
   <img src="https://img.shields.io/badge/python-3.8%2B-blue.svg" alt="Python">
   <img src="https://img.shields.io/badge/license-MIT-red.svg" alt="License">
