@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-RootScan - Advanced Port Scanner (FIXED VERSION)
+RootScan - Advanced Port Scanner 
 Created by @y3rm4n
-Fixed by Claude - Resolved XMAS scan loop and progress display issues
 """
 
 import socket
@@ -26,6 +25,7 @@ from collections import defaultdict
 import signal
 import xml.etree.ElementTree as ET
 import csv
+from pathlib import Path
 
 # ASCII Banner - Fixed escape sequences
 BANNER = r"""
@@ -36,7 +36,7 @@ BANNER = r"""
 /_/ |_|\____/\____/\__//____/\___/\__,_/_/ /_/ 
                                                 
         Created by @y3rm4n
-        Advanced Network Scanner v1.0.4 
+        Advanced Network Scanner v1.0.5 
         ================================
 """
 
@@ -78,6 +78,340 @@ class Colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
 
+class VulnDatabase:
+    """Load and manage vulnerability database from JSON"""
+    
+    def __init__(self, vulns_file="vulns/database.json"):
+        self.vulns_file = Path(vulns_file)
+        self.vulns = {}
+        self.load_vulns()
+    
+    def load_vulns(self):
+        """Load all vulnerabilities from JSON file"""
+        if not self.vulns_file.exists():
+            print(f"{Colors.YELLOW}[!] Vulnerability database not found: {self.vulns_file}{Colors.RESET}")
+            print(f"{Colors.YELLOW}[!] Create vulns/ directory and add database.json file{Colors.RESET}")
+            return
+        
+        try:
+            with open(self.vulns_file, 'r') as f:
+                self.vulns = json.load(f)
+                print(f"{Colors.GREEN}[+] Loaded {len(self.vulns)} vulnerabilities from database{Colors.RESET}")
+        except Exception as e:
+            print(f"{Colors.RED}[-] Error loading vulnerability database: {e}{Colors.RESET}")
+    
+    def get_vulns_for_port(self, port):
+        """Get vulnerabilities applicable to a port"""
+        applicable_vulns = []
+        for vuln_name, vuln_data in self.vulns.items():
+            if port in vuln_data.get('ports', []):
+                applicable_vulns.append((vuln_name, vuln_data))
+        return applicable_vulns
+    
+    def get_vuln(self, vuln_name):
+        """Get a specific vulnerability"""
+        return self.vulns.get(vuln_name)
+    
+    def list_vulns(self):
+        """List all available vulnerabilities"""
+        return list(self.vulns.keys())
+    
+    def get_vulns_by_category(self, category):
+        """Get vulnerabilities by category"""
+        category_vulns = []
+        for vuln_name, vuln_data in self.vulns.items():
+            if vuln_data.get('category', '').lower() == category.lower():
+                category_vulns.append((vuln_name, vuln_data))
+        return category_vulns
+
+class VulnScanner:
+    """JSON-based vulnerability scanner"""
+    
+    def __init__(self, target, vuln_db):
+        self.target = target
+        self.vuln_db = vuln_db
+    
+    def scan_vuln(self, vuln_name, port):
+        """Scan a specific vulnerability"""
+        vuln_data = self.vuln_db.get_vuln(vuln_name)
+        if not vuln_data:
+            return {'error': f'Vulnerability {vuln_name} not found'}
+        
+        # Execute check based on vulnerability type
+        if vuln_name == 'ftp-anon':
+            return self.check_ftp_anon(port, vuln_data)
+        elif vuln_name == 'http-methods':
+            return self.check_http_methods(port, vuln_data)
+        elif vuln_name == 'ssl-heartbleed':
+            return self.check_ssl_heartbleed(port, vuln_data)
+        elif vuln_name == 'mysql-empty-password':
+            return self.check_mysql_empty_password(port, vuln_data)
+        elif vuln_name == 'smb-vuln-ms17-010':
+            return self.check_smb_ms17_010(port, vuln_data)
+        elif vuln_name == 'telnet-encryption':
+            return self.check_telnet_encryption(port, vuln_data)
+        elif vuln_name == 'ssh-hostkey':
+            return self.check_ssh_hostkey(port, vuln_data)
+        elif vuln_name in ['http-robots', 'http-server-header']:
+            return self.check_http_info(port, vuln_data, vuln_name)
+        else:
+            return self.generic_port_check(port, vuln_data)
+    
+    def check_ftp_anon(self, port, vuln_data):
+        """Check FTP anonymous access"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((self.target, port))
+            
+            banner = sock.recv(1024).decode('utf-8', errors='ignore')
+            
+            sock.send(b'USER anonymous\r\n')
+            time.sleep(0.5)
+            response1 = sock.recv(1024).decode('utf-8', errors='ignore')
+            
+            if '331' in response1:
+                sock.send(b'PASS anonymous@example.com\r\n')
+                time.sleep(0.5)
+                response2 = sock.recv(1024).decode('utf-8', errors='ignore')
+                
+                if '230' in response2:
+                    sock.send(b'QUIT\r\n')
+                    sock.close()
+                    return {
+                        'vulnerable': True,
+                        'severity': vuln_data['severity'],
+                        'description': 'FTP anonymous access allowed',
+                        'evidence': response2.strip(),
+                        'recommendation': 'Disable anonymous FTP access'
+                    }
+            
+            sock.send(b'QUIT\r\n')
+            sock.close()
+            return {'vulnerable': False, 'description': 'FTP anonymous access denied'}
+            
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_http_methods(self, port, vuln_data):
+        """Check HTTP methods"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((self.target, port))
+            
+            request = vuln_data['payloads']['request'].format(target=self.target)
+            sock.send(request.encode())
+            response = sock.recv(2048).decode('utf-8', errors='ignore')
+            sock.close()
+            
+            if 'Allow:' in response:
+                for line in response.split('\n'):
+                    if 'allow:' in line.lower():
+                        methods = line.split(':')[1].strip()
+                        dangerous = [m for m in vuln_data['dangerous_methods'] 
+                                   if m in methods.upper()]
+                        
+                        return {
+                            'vulnerable': len(dangerous) > 0,
+                            'severity': vuln_data['severity'],
+                            'description': f'HTTP methods: {methods}',
+                            'dangerous_methods': dangerous,
+                            'recommendation': f'Disable: {", ".join(dangerous)}' if dangerous else 'Methods are secure'
+                        }
+            
+            return {'vulnerable': False, 'description': 'Could not enumerate HTTP methods'}
+            
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_ssl_heartbleed(self, port, vuln_data):
+        """Check SSL Heartbleed"""
+        try:
+            context = ssl.create_default_context()
+            context.check_hostname = False
+            context.verify_mode = ssl.CERT_NONE
+            
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            
+            wrapped_socket = context.wrap_socket(sock)
+            wrapped_socket.connect((self.target, port))
+            
+            version = wrapped_socket.version()
+            cipher = wrapped_socket.cipher()
+            wrapped_socket.close()
+            
+            vulnerable = version in vuln_data['vulnerable_versions']
+            
+            return {
+                'vulnerable': vulnerable,
+                'severity': vuln_data['severity'] if vulnerable else 'LOW',
+                'description': f'SSL/TLS version: {version}',
+                'ssl_version': version,
+                'cipher': cipher[0] if cipher else 'Unknown',
+                'recommendation': 'Upgrade to TLS 1.2+' if vulnerable else 'SSL version is secure'
+            }
+            
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_mysql_empty_password(self, port, vuln_data):
+        """Check MySQL empty password"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((self.target, port))
+            sock.close()
+            
+            if result == 0:
+                return {
+                    'vulnerable': 'UNKNOWN',
+                    'severity': vuln_data['severity'],
+                    'description': 'MySQL service detected - manual check required',
+                    'recommendation': 'Test with MySQL client for empty passwords'
+                }
+            else:
+                return {'vulnerable': False, 'description': 'MySQL service not accessible'}
+                
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_smb_ms17_010(self, port, vuln_data):
+        """Check SMB MS17-010"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((self.target, port))
+            sock.close()
+            
+            if result == 0:
+                return {
+                    'vulnerable': 'UNKNOWN', 
+                    'severity': vuln_data['severity'],
+                    'description': f'SMB service detected on port {port}',
+                    'recommendation': 'Manual verification required for MS17-010'
+                }
+            else:
+                return {'vulnerable': False, 'description': f'No SMB service on port {port}'}
+                
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_telnet_encryption(self, port, vuln_data):
+        """Check Telnet encryption"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((self.target, port))
+            
+            if result == 0:
+                sock.close()
+                return {
+                    'vulnerable': True,
+                    'severity': vuln_data['severity'],
+                    'description': 'Unencrypted Telnet service detected',
+                    'recommendation': 'Replace Telnet with SSH immediately'
+                }
+            else:
+                return {'vulnerable': False, 'description': 'Telnet service not accessible'}
+                
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_ssh_hostkey(self, port, vuln_data):
+        """Check SSH host key information"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            sock.connect((self.target, port))
+            
+            banner = sock.recv(1024).decode('utf-8', errors='ignore').strip()
+            sock.close()
+            
+            if 'SSH-' in banner:
+                return {
+                    'vulnerable': False,
+                    'severity': vuln_data['severity'],
+                    'description': f'SSH service detected: {banner}',
+                    'ssh_version': banner,
+                    'recommendation': 'Check for known vulnerabilities in this SSH version'
+                }
+            else:
+                return {'vulnerable': False, 'description': 'Could not retrieve SSH banner'}
+                
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def check_http_info(self, port, vuln_data, vuln_type):
+        """Check HTTP information disclosure"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            sock.connect((self.target, port))
+            
+            if vuln_type == 'http-robots':
+                request = f"GET /robots.txt HTTP/1.1\r\nHost: {self.target}\r\n\r\n"
+            else:  # http-server-header
+                request = f"HEAD / HTTP/1.1\r\nHost: {self.target}\r\n\r\n"
+            
+            sock.send(request.encode())
+            response = sock.recv(2048).decode('utf-8', errors='ignore')
+            sock.close()
+            
+            if vuln_type == 'http-robots':
+                if any(indicator in response for indicator in vuln_data['success_indicators']):
+                    return {
+                        'vulnerable': True,
+                        'severity': vuln_data['severity'],
+                        'description': 'robots.txt file found',
+                        'evidence': response[:200],
+                        'recommendation': 'Review robots.txt for sensitive information disclosure'
+                    }
+                else:
+                    return {'vulnerable': False, 'description': 'robots.txt not found or accessible'}
+            
+            else:  # http-server-header
+                server_info = []
+                for line in response.split('\n'):
+                    if 'server:' in line.lower() or 'x-powered-by:' in line.lower():
+                        server_info.append(line.strip())
+                
+                if server_info:
+                    return {
+                        'vulnerable': True,
+                        'severity': vuln_data['severity'],
+                        'description': 'Server information disclosed',
+                        'evidence': '; '.join(server_info),
+                        'recommendation': 'Configure server to hide version information'
+                    }
+                else:
+                    return {'vulnerable': False, 'description': 'No server information disclosed'}
+            
+        except Exception as e:
+            return {'error': str(e)}
+    
+    def generic_port_check(self, port, vuln_data):
+        """Generic port connectivity check"""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(3)
+            result = sock.connect_ex((self.target, port))
+            sock.close()
+            
+            if result == 0:
+                return {
+                    'status': 'INFO',
+                    'description': f'Service detected on port {port}',
+                    'severity': vuln_data.get('severity', 'LOW'),
+                    'recommendation': 'Manual verification required'
+                }
+            else:
+                return {'status': 'CLOSED', 'description': f'No service on port {port}'}
+                
+        except Exception as e:
+            return {'error': str(e)}
+
 class ProgressDisplay:
     """Manages clean progress bar and port discovery display"""
     
@@ -85,7 +419,7 @@ class ProgressDisplay:
         self.total_ports = total_ports
         self.completed = 0
         self.lock = threading.Lock()
-        self.experimental_warning_shown = False  # Track if warning has been shown
+        self.experimental_warning_shown = False
         
     def update_progress(self):
         """Update the progress bar"""
@@ -96,7 +430,6 @@ class ProgressDisplay:
             filled = int(bar_length * self.completed / self.total_ports)
             bar = '█' * filled + '─' * (bar_length - filled)
             
-            # Simple progress update with carriage return
             progress_line = f'\r{Colors.YELLOW}Progress: [{bar}] {progress:.1f}% ({self.completed}/{self.total_ports}){Colors.RESET}'
             sys.stdout.write(progress_line)
             sys.stdout.flush()
@@ -112,11 +445,9 @@ class ProgressDisplay:
         with self.lock:
             banner_text = banner[:40] if banner else 'N/A'
             
-            # Clear current progress line and show discovery
-            sys.stdout.write('\r' + ' ' * 80 + '\r')  # Clear line
+            sys.stdout.write('\r' + ' ' * 80 + '\r')
             print(f"{Colors.GREEN}[+] {port:>5}/tcp  {service:<15} {banner_text}...{Colors.RESET}")
             
-            # Redraw progress bar
             progress = self.completed / self.total_ports * 100
             bar_length = 50
             filled = int(bar_length * self.completed / self.total_ports)
@@ -128,8 +459,7 @@ class ProgressDisplay:
     
     def initialize_display(self):
         """Initialize the display layout"""
-        print()  # Empty line for spacing
-        # Show initial progress bar
+        print()
         bar = '─' * 50
         sys.stdout.write(f'{Colors.YELLOW}Progress: [{bar}] 0.0% (0/{self.total_ports}){Colors.RESET}')
         sys.stdout.flush()
@@ -137,11 +467,10 @@ class ProgressDisplay:
     def finalize_display(self):
         """Clean up the display when scan is complete"""
         with self.lock:
-            # Final progress update
             bar = '█' * 50
             final_line = f'\r{Colors.GREEN}Progress: [{bar}] 100.0% ({self.total_ports}/{self.total_ports}) - Scan Complete!{Colors.RESET}'
             sys.stdout.write(final_line)
-            print('\n')  # Move to next line
+            print('\n')
             sys.stdout.flush()
 
 class AdvancedScanner:
@@ -176,190 +505,6 @@ class AdvancedScanner:
             port_list = list(ports)
         random.shuffle(port_list)
         return port_list
-
-class NmapScriptEngine:
-    """NSE-like script engine for advanced scanning"""
-    
-    def __init__(self, target):
-        self.target = target
-        self.scripts = {
-            'smb-vuln-ms17-010': self.check_eternalblue,
-            'ssl-heartbleed': self.check_heartbleed,
-            'http-methods': self.check_http_methods,
-            'ftp-anon': self.check_ftp_anonymous,
-            'mysql-empty-password': self.check_mysql_empty_password
-        }
-    
-    def run_script(self, script_name, port):
-        """Run a specific script"""
-        if script_name in self.scripts:
-            return self.scripts[script_name](port)
-        return None
-    
-    def check_eternalblue(self, port):
-        """Check for MS17-010 (EternalBlue) vulnerability"""
-        if port not in [139, 445]:
-            return None
-        
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            result = sock.connect_ex((self.target, port))
-            sock.close()
-            
-            if result == 0:
-                return {
-                    'script': 'smb-vuln-ms17-010',
-                    'status': 'POTENTIALLY_VULNERABLE',
-                    'severity': 'CRITICAL',
-                    'description': f'SMB service running on port {port} - check for MS17-010',
-                    'recommendation': 'Test with specific EternalBlue exploit tools'
-                }
-        except:
-            pass
-        
-        return None
-    
-    def check_heartbleed(self, port):
-        """Check for Heartbleed vulnerability"""
-        if port not in [443, 8443]:
-            return None
-        
-        try:
-            context = ssl.create_default_context()
-            context.check_hostname = False
-            context.verify_mode = ssl.CERT_NONE
-            
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            
-            wrapped_socket = context.wrap_socket(sock)
-            wrapped_socket.connect((self.target, port))
-            
-            version = wrapped_socket.version()
-            wrapped_socket.close()
-            
-            if version and 'TLS' in version:
-                return {
-                    'script': 'ssl-heartbleed',
-                    'status': 'SSL_DETECTED',
-                    'severity': 'MEDIUM',
-                    'ssl_version': version,
-                    'description': f'SSL/TLS service detected ({version}) - manual Heartbleed check recommended',
-                    'recommendation': 'Use dedicated Heartbleed testing tools'
-                }
-        except:
-            pass
-        
-        return None
-    
-    def check_http_methods(self, port):
-        """Check allowed HTTP methods"""
-        if port not in [80, 8080, 8000, 8888, 443, 8443]:
-            return None
-        
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            sock.connect((self.target, port))
-            
-            request = f"OPTIONS / HTTP/1.1\r\nHost: {self.target}\r\nConnection: close\r\n\r\n"
-            sock.send(request.encode())
-            response = sock.recv(2048).decode('utf-8', errors='ignore')
-            sock.close()
-            
-            if 'Allow:' in response or 'allow:' in response:
-                allow_line = None
-                for line in response.split('\n'):
-                    if 'allow:' in line.lower():
-                        allow_line = line
-                        break
-                
-                if allow_line:
-                    methods = allow_line.split(':')[1].strip()
-                    dangerous = ['PUT', 'DELETE', 'TRACE', 'CONNECT', 'PATCH']
-                    found_dangerous = [m for m in dangerous if m.upper() in methods.upper()]
-                    
-                    result = {
-                        'script': 'http-methods',
-                        'methods': methods,
-                        'severity': 'MEDIUM' if found_dangerous else 'LOW',
-                        'description': f'HTTP methods available: {methods}'
-                    }
-                    
-                    if found_dangerous:
-                        result['dangerous'] = found_dangerous
-                        result['recommendation'] = f'Disable dangerous HTTP methods: {", ".join(found_dangerous)}'
-                    
-                    return result
-        except:
-            pass
-        
-        return None
-    
-    def check_ftp_anonymous(self, port):
-        """Check for anonymous FTP access"""
-        if port != 21:
-            return None
-        
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(5)
-            sock.connect((self.target, port))
-            
-            banner = sock.recv(1024).decode('utf-8', errors='ignore')
-            
-            sock.send(b'USER anonymous\r\n')
-            time.sleep(0.5)
-            response = sock.recv(1024).decode('utf-8', errors='ignore')
-            
-            if '331' in response:
-                sock.send(b'PASS anonymous@example.com\r\n')
-                time.sleep(0.5)
-                response = sock.recv(1024).decode('utf-8', errors='ignore')
-                
-                if '230' in response:
-                    sock.send(b'QUIT\r\n')
-                    sock.close()
-                    return {
-                        'script': 'ftp-anon',
-                        'status': 'VULNERABLE',
-                        'severity': 'HIGH',
-                        'description': 'Anonymous FTP login allowed',
-                        'banner': banner.strip(),
-                        'recommendation': 'Disable anonymous FTP access'
-                    }
-            
-            sock.send(b'QUIT\r\n')
-            sock.close()
-        except:
-            pass
-        
-        return None
-    
-    def check_mysql_empty_password(self, port):
-        """Check for MySQL empty password"""
-        if port != 3306:
-            return None
-        
-        try:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.settimeout(3)
-            result = sock.connect_ex((self.target, port))
-            sock.close()
-            
-            if result == 0:
-                return {
-                    'script': 'mysql-empty-password',
-                    'status': 'MYSQL_DETECTED',
-                    'severity': 'MEDIUM',
-                    'description': 'MySQL service detected - check for weak passwords',
-                    'recommendation': 'Test for default/empty passwords using dedicated MySQL tools'
-                }
-        except:
-            pass
-        
-        return None
 
 class ScanStatistics:
     """Track and display scan statistics"""
@@ -433,7 +578,6 @@ class PortScanner:
         self.rate_limiter = None
         self.statistics = ScanStatistics()
         self.advanced_scanner = AdvancedScanner(target)
-        self.script_engine = NmapScriptEngine(target)
         self.progress_display = None
         
     def resolve_target(self):
@@ -567,11 +711,9 @@ class PortScanner:
     
     def xmas_scan(self, port):
         """XMAS scan implementation - FIXED"""
-        # Show warning only once through progress display
         if self.progress_display:
             self.progress_display.show_experimental_warning('XMAS')
         
-        # For now, fall back to TCP connect scan (single call, no loop)
         return self.tcp_connect_scan(port)
     
     def fin_scan(self, port):
@@ -730,7 +872,7 @@ class PortScanner:
             return self.tcp_connect_scan(port)
     
     def run_scan(self):
-        """Run the port scan - FIXED PROGRESS DISPLAY"""
+        """Run the port scan"""
         print(f"\n{Colors.CYAN}[*] Starting {self.scan_type.upper()} scan on {self.target}{Colors.RESET}")
         print(f"{Colors.CYAN}[*] Port range: {self.start_port}-{self.end_port}{Colors.RESET}")
         print(f"{Colors.CYAN}[*] Threads: {self.threads}{Colors.RESET}")
@@ -738,17 +880,14 @@ class PortScanner:
         
         self.start_time = time.time()
         
-        # Get port list
         if hasattr(self.advanced_scanner, 'randomize') and self.advanced_scanner.randomize:
             ports = self.advanced_scanner.randomize_scan_order((self.start_port, self.end_port))
         else:
             ports = range(self.start_port, self.end_port + 1)
         
-        # Convert to list to get accurate count
         ports_list = list(ports)
         total_ports = len(ports_list)
         
-        # Initialize progress display AFTER all initial messages
         self.progress_display = ProgressDisplay(total_ports)
         self.progress_display.initialize_display()
         
@@ -765,9 +904,7 @@ class PortScanner:
                     self.progress_display.update_progress()
                     self.statistics.update(error=True)
         
-        # Finalize display
         self.progress_display.finalize_display()
-        
         self.end_time = time.time()
     
     def scan_port_with_stats(self, port):
@@ -775,8 +912,7 @@ class PortScanner:
         if self.rate_limiter:
             self.rate_limiter.wait()
         
-        # Update statistics
-        self.statistics.update(sent=1, bytes_out=64)  # Approximate packet size
+        self.statistics.update(sent=1, bytes_out=64)
         
         result = self.scan_port(port)
         
@@ -786,7 +922,7 @@ class PortScanner:
         return result
     
     def generate_report(self):
-        """Generate scan report - IMPROVED FORMATTING"""
+        """Generate scan report"""
         scan_duration = self.end_time - self.start_time if self.end_time else 0
         
         print(f"\n{Colors.BOLD}{Colors.CYAN}{'='*70}{Colors.RESET}")
@@ -813,10 +949,9 @@ class PortScanner:
                 service = self.scan_results[port]['service']
                 banner = self.scan_results[port]['banner'] or 'N/A'
                 
-                # Clean and format banner
                 if banner != 'N/A':
                     banner = banner.replace('\n', ' ').replace('\r', '')
-                    banner = ' '.join(banner.split())  # Remove extra spaces
+                    banner = ' '.join(banner.split())
                     if len(banner) > 42:
                         banner = banner[:39] + '...'
                 
@@ -857,7 +992,6 @@ class NetworkDiscovery:
                     live_hosts.append(ip_str)
                     print(f"{Colors.GREEN}[+] {ip_str} is alive{Colors.RESET}")
                 
-                # Progress update
                 progress = checked / total_hosts * 100
                 sys.stdout.write(f'\r{Colors.YELLOW}Progress: {progress:.1f}% ({checked}/{total_hosts}){Colors.RESET}')
                 sys.stdout.flush()
@@ -1006,192 +1140,6 @@ def save_results(scanner, filename):
     except Exception as e:
         print(f"{Colors.RED}[-] Error saving results: {e}{Colors.RESET}")
 
-class VulnerabilityScanner:
-    """Vulnerability detection module"""
-    
-    def __init__(self, target, scan_results):
-        self.target = target
-        self.scan_results = scan_results
-        self.vulnerabilities = []
-        self.vuln_database = self.load_vulnerability_database()
-    
-    def load_vulnerability_database(self):
-        """Load vulnerability database"""
-        return {
-            21: {
-                'service': 'FTP',
-                'common_vulns': ['Anonymous access', 'Weak authentication', 'Directory traversal'],
-                'severity': 'MEDIUM'
-            },
-            22: {
-                'service': 'SSH',
-                'common_vulns': ['Weak passwords', 'Key-based attacks', 'Version vulnerabilities'],
-                'severity': 'MEDIUM'
-            },
-            23: {
-                'service': 'Telnet',
-                'common_vulns': ['Unencrypted communications', 'Weak authentication'],
-                'severity': 'HIGH'
-            },
-            80: {
-                'service': 'HTTP',
-                'common_vulns': ['Directory traversal', 'XSS', 'SQL injection', 'Unencrypted traffic'],
-                'severity': 'MEDIUM'
-            },
-            135: {
-                'service': 'RPC',
-                'common_vulns': ['RPC vulnerabilities', 'Information disclosure'],
-                'severity': 'MEDIUM'
-            },
-            139: {
-                'service': 'NetBIOS',
-                'common_vulns': ['MS17-010 EternalBlue', 'SMB vulnerabilities', 'Information disclosure'],
-                'severity': 'CRITICAL'
-            },
-            443: {
-                'service': 'HTTPS',
-                'common_vulns': ['SSL/TLS misconfigurations', 'Certificate issues', 'Weak ciphers'],
-                'severity': 'MEDIUM'
-            },
-            445: {
-                'service': 'SMB',
-                'common_vulns': ['MS17-010 EternalBlue', 'SMB vulnerabilities', 'Null sessions'],
-                'severity': 'CRITICAL'
-            },
-            1433: {
-                'service': 'MSSQL',
-                'common_vulns': ['SQL injection', 'Weak passwords', 'Information disclosure'],
-                'severity': 'HIGH'
-            },
-            3306: {
-                'service': 'MySQL',
-                'common_vulns': ['Weak passwords', 'SQL injection', 'Information disclosure'],
-                'severity': 'HIGH'
-            },
-            3389: {
-                'service': 'RDP',
-                'common_vulns': ['BlueKeep', 'Weak passwords', 'Brute force attacks'],
-                'severity': 'HIGH'
-            },
-            5432: {
-                'service': 'PostgreSQL',
-                'common_vulns': ['Weak passwords', 'SQL injection', 'Information disclosure'],
-                'severity': 'HIGH'
-            }
-        }
-    
-    def check_vulnerabilities(self):
-        """Check for common vulnerabilities"""
-        print(f"\n{Colors.CYAN}[*] Analyzing services for known vulnerabilities...{Colors.RESET}\n")
-        
-        for port, info in self.scan_results.items():
-            if info['state'] == 'open':
-                self.check_service_vulnerabilities(port, info)
-        
-        return self.vulnerabilities
-    
-    def check_service_vulnerabilities(self, port, info):
-        """Check vulnerabilities for specific services"""
-        service = info['service']
-        banner = info['banner']
-        
-        if port in self.vuln_database:
-            vuln_info = self.vuln_database[port]
-            
-            vuln = {
-                'port': port,
-                'service': service,
-                'severity': vuln_info['severity'],
-                'vulnerability': f'{vuln_info["service"]} Service Exposed',
-                'description': f'{vuln_info["service"]} service is accessible from network',
-                'common_vulns': vuln_info['common_vulns'],
-                'recommendation': f'Secure {vuln_info["service"]} service and restrict network access'
-            }
-            
-            self.vulnerabilities.append(vuln)
-            self.print_vulnerability(port, vuln)
-        
-        if port == 23:
-            self.check_telnet_vulnerabilities(port, banner)
-        elif port in [80, 8080, 8000, 8888]:
-            self.check_http_vulnerabilities(port, banner)
-        elif port in [139, 445]:
-            self.check_smb_vulnerabilities(port, banner)
-    
-    def check_telnet_vulnerabilities(self, port, banner):
-        """Check Telnet-specific vulnerabilities"""
-        vuln = {
-            'port': port,
-            'service': 'Telnet',
-            'severity': 'CRITICAL',
-            'vulnerability': 'Unencrypted Telnet Service',
-            'description': 'Telnet transmits credentials and data in plaintext',
-            'recommendation': 'Replace Telnet with SSH immediately'
-        }
-        
-        self.vulnerabilities.append(vuln)
-        self.print_vulnerability(port, vuln)
-    
-    def check_http_vulnerabilities(self, port, banner):
-        """Check HTTP-specific vulnerabilities"""
-        vulns = []
-        
-        if port == 80:
-            vulns.append({
-                'severity': 'MEDIUM',
-                'vulnerability': 'Unencrypted HTTP Service',
-                'description': 'HTTP service transmits data in plaintext',
-                'recommendation': 'Implement HTTPS with proper SSL/TLS configuration'
-            })
-        
-        if banner and any(server in banner.lower() for server in ['apache', 'nginx', 'iis']):
-            if any(version in banner.lower() for version in ['/', '2.', '1.', '7.', '8.', '9.']):
-                vulns.append({
-                    'severity': 'LOW',
-                    'vulnerability': 'Server Version Disclosure',
-                    'description': f'Server version information exposed: {banner[:50]}',
-                    'recommendation': 'Configure server to hide version information'
-                })
-        
-        for vuln in vulns:
-            vuln.update({'port': port, 'service': 'HTTP'})
-            self.vulnerabilities.append(vuln)
-            self.print_vulnerability(port, vuln)
-    
-    def check_smb_vulnerabilities(self, port, banner):
-        """Check SMB-specific vulnerabilities"""
-        vuln = {
-            'port': port,
-            'service': 'SMB',
-            'severity': 'CRITICAL',
-            'vulnerability': 'SMB Service Exposed - Potential EternalBlue Target',
-            'description': 'SMB service may be vulnerable to MS17-010 (EternalBlue) and other SMB exploits',
-            'recommendation': 'Apply security patches and restrict SMB access to trusted networks only'
-        }
-        
-        self.vulnerabilities.append(vuln)
-        self.print_vulnerability(port, vuln)
-    
-    def print_vulnerability(self, port, vuln):
-        """Print vulnerability information with improved formatting"""
-        severity_colors = {
-            'CRITICAL': Colors.RED,
-            'HIGH': Colors.RED,
-            'MEDIUM': Colors.YELLOW,
-            'LOW': Colors.BLUE,
-            'INFO': Colors.CYAN
-        }
-        
-        color = severity_colors.get(vuln['severity'], Colors.WHITE)
-        print(f"{color}[!] Port {port} - {vuln['severity']}: {vuln['vulnerability']}{Colors.RESET}")
-        print(f"    {Colors.WHITE}Description: {vuln['description']}{Colors.RESET}")
-        print(f"    {Colors.GREEN}Recommendation: {vuln['recommendation']}{Colors.RESET}")
-        
-        if 'common_vulns' in vuln:
-            print(f"    {Colors.CYAN}Common issues: {', '.join(vuln['common_vulns'])}{Colors.RESET}")
-        
-        print()
-
 class TimingProfiles:
     """Timing profiles for different scan speeds"""
     
@@ -1292,6 +1240,47 @@ class ExportFormats:
         except Exception as e:
             print(f"{Colors.RED}[-] Error exporting CSV: {e}{Colors.RESET}")
 
+def print_vuln_result(vuln_name, port, result):
+    """Print vulnerability result"""
+    if result.get('error'):
+        print(f"{Colors.RED}[ERROR] {vuln_name} on port {port}: {result['error']}{Colors.RESET}")
+        return
+    
+    if result.get('vulnerable') is True:
+        status_color = Colors.RED
+        status = "VULNERABLE"
+    elif result.get('vulnerable') == 'UNKNOWN':
+        status_color = Colors.YELLOW  
+        status = "UNKNOWN"
+    elif result.get('vulnerable') is False:
+        status_color = Colors.GREEN
+        status = "NOT VULNERABLE"
+    else:
+        status_color = Colors.CYAN
+        status = "INFO"
+    
+    severity = result.get('severity', 'LOW')
+    severity_color = {
+        'CRITICAL': Colors.RED,
+        'HIGH': Colors.RED,
+        'MEDIUM': Colors.YELLOW,
+        'LOW': Colors.GREEN
+    }.get(severity, Colors.WHITE)
+    
+    print(f"{status_color}[{status}]{Colors.RESET} {vuln_name} on port {port} "
+          f"{severity_color}[{severity}]{Colors.RESET}")
+    
+    if 'description' in result:
+        print(f"  Description: {result['description']}")
+    
+    if 'evidence' in result:
+        print(f"  Evidence: {result['evidence']}")
+    
+    if 'recommendation' in result:
+        print(f"  {Colors.GREEN}Recommendation: {result['recommendation']}{Colors.RESET}")
+    
+    print()
+
 def main():
     print(BANNER)
     
@@ -1306,6 +1295,8 @@ Examples:
   python3 rootscan.py -t 192.168.1.1 -sS -p 80,443,8080
   python3 rootscan.py -t 192.168.1.1 -sU -p 53,67,123
   python3 rootscan.py -t 192.168.1.1 --vuln-scan
+  python3 rootscan.py -t 192.168.1.1 --list-vulns
+  python3 rootscan.py -t 192.168.1.1 --vuln ftp-anon
   python3 rootscan.py -t 192.168.1.1 -o results.json --format json
         """
     )
@@ -1327,16 +1318,51 @@ Examples:
     parser.add_argument('--format', choices=['txt', 'json', 'xml', 'csv'], default='txt', help='Output format')
     parser.add_argument('--os-detect', action='store_true', help='Enable OS detection')
     parser.add_argument('--vuln-scan', action='store_true', help='Enable vulnerability scanning')
+    parser.add_argument('--list-vulns', action='store_true', help='List available vulnerabilities')
+    parser.add_argument('--vuln', action='append', help='Run specific vulnerability check')
     parser.add_argument('--top-ports', type=int, help='Scan top N most common ports')
     parser.add_argument('-v', '--verbose', action='store_true', help='Verbose output')
     parser.add_argument('--timing', choices=['paranoid', 'sneaky', 'polite', 'normal', 'aggressive', 'insane'], 
                        default='normal', help='Timing profile for scan speed')
     parser.add_argument('--rate-limit', type=int, help='Maximum packets per second')
-    parser.add_argument('--scripts', nargs='+', help='Run NSE-like scripts (e.g., smb-vuln-ms17-010)')
     parser.add_argument('--randomize', action='store_true', help='Randomize port scan order')
     parser.add_argument('--stats', action='store_true', help='Show detailed statistics after scan')
     
     args = parser.parse_args()
+    
+    # Initialize vulnerability database
+    vuln_db = VulnDatabase()
+    
+    # List vulnerabilities
+    if args.list_vulns:
+        print(f"\n{Colors.CYAN}Available Vulnerabilities:{Colors.RESET}")
+        print("=" * 50)
+        
+        # Group by category
+        categories = {}
+        for vuln_name in vuln_db.list_vulns():
+            vuln_data = vuln_db.get_vuln(vuln_name)
+            category = vuln_data.get('category', 'misc')
+            if category not in categories:
+                categories[category] = []
+            categories[category].append((vuln_name, vuln_data))
+        
+        for category, vulns in sorted(categories.items()):
+            print(f"\n{Colors.YELLOW}[{category.upper()}]{Colors.RESET}")
+            for vuln_name, vuln_data in vulns:
+                ports = ', '.join(map(str, vuln_data.get('ports', [])))
+                severity_color = {
+                    'CRITICAL': Colors.RED,
+                    'HIGH': Colors.RED,
+                    'MEDIUM': Colors.YELLOW,
+                    'LOW': Colors.GREEN
+                }.get(vuln_data.get('severity', 'LOW'), Colors.WHITE)
+                
+                print(f"  {Colors.GREEN}{vuln_name:<25}{Colors.RESET} "
+                      f"{severity_color}[{vuln_data.get('severity', 'LOW')}]{Colors.RESET} "
+                      f"Ports: {ports}")
+                print(f"    {vuln_data.get('description', 'No description')}")
+        return
     
     # Handle ARP scan specially (doesn't require target)
     if args.arp_scan:
@@ -1444,45 +1470,27 @@ Examples:
     # Run scan
     scanner.run_scan()
     
-    # Run NSE-like scripts if requested
-    if args.scripts and scanner.open_ports:
-        print(f"\n{Colors.CYAN}[*] Running scripts: {', '.join(args.scripts)}{Colors.RESET}")
+    # Execute vulnerability scans if requested
+    if (args.vuln_scan or args.vuln) and scanner.open_ports:
+        print(f"\n{Colors.CYAN}[*] Running vulnerability scans...{Colors.RESET}\n")
+        vuln_scanner = VulnScanner(args.target, vuln_db)
         
-        for script in args.scripts:
-            script_results = []
+        # Scan specific vulnerabilities
+        if args.vuln:
+            for vuln_name in args.vuln:
+                for port in scanner.open_ports:
+                    vuln_data = vuln_db.get_vuln(vuln_name)
+                    if vuln_data and port in vuln_data.get('ports', []):
+                        result = vuln_scanner.scan_vuln(vuln_name, port)
+                        print_vuln_result(vuln_name, port, result)
+        
+        # Scan all applicable vulnerabilities
+        elif args.vuln_scan:
             for port in scanner.open_ports:
-                result = scanner.script_engine.run_script(script, port)
-                if result:
-                    script_results.append((port, result))
-            
-            if script_results:
-                print(f"\n{Colors.CYAN}[*] Script: {script}{Colors.RESET}")
-                for port, result in script_results:
-                    color = Colors.RED if result.get('severity') == 'CRITICAL' else Colors.YELLOW
-                    print(f"{color}[!] Port {port}: {result.get('status', 'N/A')}{Colors.RESET}")
-                    if 'description' in result:
-                        print(f"    Description: {result['description']}")
-                    if 'recommendation' in result:
-                        print(f"    Recommendation: {result['recommendation']}")
-    
-    # Vulnerability scanning if requested
-    if args.vuln_scan and scanner.open_ports:
-        vuln_scanner = VulnerabilityScanner(scanner.target, scanner.scan_results)
-        vulnerabilities = vuln_scanner.check_vulnerabilities()
-        
-        if vulnerabilities:
-            print(f"\n{Colors.BOLD}{Colors.RED}VULNERABILITY SUMMARY:{Colors.RESET}")
-            print(f"{Colors.WHITE}{'='*70}{Colors.RESET}")
-            print(f"{Colors.WHITE}Total vulnerabilities found: {len(vulnerabilities)}{Colors.RESET}")
-            
-            severity_count = {}
-            for vuln in vulnerabilities:
-                severity = vuln['severity']
-                severity_count[severity] = severity_count.get(severity, 0) + 1
-            
-            for severity, count in severity_count.items():
-                color = Colors.RED if severity in ['CRITICAL', 'HIGH'] else Colors.YELLOW
-                print(f"{color}{severity}: {count}{Colors.RESET}")
+                applicable_vulns = vuln_db.get_vulns_for_port(port)
+                for vuln_name, vuln_data in applicable_vulns:
+                    result = vuln_scanner.scan_vuln(vuln_name, port)
+                    print_vuln_result(vuln_name, port, result)
     
     # Generate report
     scanner.generate_report()

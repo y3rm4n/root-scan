@@ -1,0 +1,317 @@
+{
+  "ftp-anon": {
+    "name": "FTP Anonymous Access",
+    "description": "Checks if FTP server allows anonymous login",
+    "severity": "HIGH",
+    "ports": [21, 2121],
+    "category": "ftp",
+    "payloads": {
+      "username": "anonymous",
+      "password": "anonymous@example.com"
+    },
+    "success_indicators": ["230", "Login successful", "Anonymous"],
+    "failure_indicators": ["530", "Access denied", "Login failed"]
+  },
+  "ftp-bounce": {
+    "name": "FTP Bounce Attack", 
+    "description": "Checks for FTP bounce vulnerability",
+    "severity": "MEDIUM",
+    "ports": [21],
+    "category": "ftp",
+    "payloads": {
+      "command": "PORT 127,0,0,1,0,22"
+    },
+    "success_indicators": ["200", "PORT command successful"],
+    "failure_indicators": ["500", "Illegal PORT"]
+  },
+  "smb-vuln-ms17-010": {
+    "name": "MS17-010 EternalBlue",
+    "description": "Checks for EternalBlue vulnerability in SMB",
+    "severity": "CRITICAL", 
+    "ports": [139, 445],
+    "category": "smb",
+    "payloads": {
+      "check_method": "banner_analysis"
+    },
+    "success_indicators": ["Windows", "SMB"],
+    "failure_indicators": ["Connection refused", "Timeout"]
+  },
+  "smb-null-session": {
+    "name": "SMB Null Session",
+    "description": "Checks for SMB null session vulnerability",
+    "severity": "MEDIUM",
+    "ports": [139, 445],
+    "category": "smb",
+    "payloads": {
+      "username": "",
+      "password": ""
+    },
+    "success_indicators": ["STATUS_SUCCESS", "Anonymous"],
+    "failure_indicators": ["ACCESS_DENIED", "LOGON_FAILURE"]
+  },
+  "http-methods": {
+    "name": "HTTP Methods Enumeration",
+    "description": "Enumerates allowed HTTP methods",
+    "severity": "MEDIUM",
+    "ports": [80, 8080, 8000, 443, 8443],
+    "category": "http",
+    "payloads": {
+      "request": "OPTIONS / HTTP/1.1\r\nHost: {target}\r\n\r\n"
+    },
+    "success_indicators": ["Allow:", "OPTIONS"],
+    "dangerous_methods": ["PUT", "DELETE", "TRACE", "CONNECT"]
+  },
+  "http-robots": {
+    "name": "Robots.txt Analysis", 
+    "description": "Checks for robots.txt file disclosure",
+    "severity": "LOW",
+    "ports": [80, 443, 8080],
+    "category": "http",
+    "payloads": {
+      "path": "/robots.txt"
+    },
+    "success_indicators": ["User-agent:", "Disallow:", "Allow:"],
+    "failure_indicators": ["404", "Not Found"]
+  },
+  "http-server-header": {
+    "name": "HTTP Server Header Disclosure",
+    "description": "Checks for server version information disclosure",
+    "severity": "LOW",
+    "ports": [80, 443, 8080, 8000, 8888],
+    "category": "http",
+    "payloads": {
+      "request": "HEAD / HTTP/1.1\r\nHost: {target}\r\n\r\n"
+    },
+    "success_indicators": ["Server:", "X-Powered-By:"],
+    "failure_indicators": ["Connection refused"]
+  },
+  "ssl-heartbleed": {
+    "name": "SSL Heartbleed Vulnerability",
+    "description": "Checks for Heartbleed vulnerability in SSL/TLS",
+    "severity": "HIGH", 
+    "ports": [443, 8443, 993, 995, 465],
+    "category": "ssl",
+    "payloads": {
+      "check_method": "ssl_handshake"
+    },
+    "vulnerable_versions": ["TLSv1.0", "TLSv1.1"],
+    "safe_versions": ["TLSv1.2", "TLSv1.3"]
+  },
+  "ssl-weak-cipher": {
+    "name": "Weak SSL Ciphers",
+    "description": "Detects weak SSL/TLS cipher suites",
+    "severity": "MEDIUM",
+    "ports": [443, 8443],
+    "category": "ssl",
+    "weak_ciphers": ["DES", "3DES", "RC4", "MD5"],
+    "strong_ciphers": ["AES", "ChaCha20", "SHA256"]
+  },
+  "mysql-empty-password": {
+    "name": "MySQL Empty Password",
+    "description": "Checks for MySQL empty root password",
+    "severity": "HIGH",
+    "ports": [3306],
+    "category": "database",
+    "payloads": {
+      "username": "root",
+      "password": ""
+    },
+    "success_indicators": ["mysql_native_password", "Access granted"],
+    "failure_indicators": ["Access denied", "Authentication failed"]
+  },
+  "postgres-default": {
+    "name": "PostgreSQL Default Credentials",
+    "description": "Checks for default PostgreSQL credentials",
+    "severity": "HIGH", 
+    "ports": [5432],
+    "category": "database",
+    "payloads": {
+      "username": "postgres",
+      "password": "postgres"
+    },
+    "success_indicators": ["AUTHENTICATION_OK", "Connected"],
+    "failure_indicators": ["AUTHENTICATION_FAILED", "Connection refused"]
+  },
+  "ssh-hostkey": {
+    "name": "SSH Host Key Information",
+    "description": "Retrieves SSH host key information",
+    "severity": "LOW",
+    "ports": [22, 2222],
+    "category": "ssh",
+    "payloads": {
+      "check_method": "banner_grab"
+    },
+    "success_indicators": ["SSH-", "OpenSSH"],
+    "failure_indicators": ["Connection refused"]
+  },
+  "telnet-encryption": {
+    "name": "Telnet Unencrypted Service",
+    "description": "Detects unencrypted Telnet service",
+    "severity": "CRITICAL",
+    "ports": [23],
+    "category": "telnet",
+    "payloads": {
+      "check_method": "connect"
+    },
+    "success_indicators": ["login:", "Username:", "Password:"],
+    "failure_indicators": ["Connection refused"]
+  },
+  "dns-zone-transfer": {
+    "name": "DNS Zone Transfer",
+    "description": "Checks for DNS zone transfer vulnerability",
+    "severity": "HIGH",
+    "ports": [53],
+    "category": "dns",
+    "payloads": {
+      "query_type": "AXFR"
+    },
+    "success_indicators": ["ANSWER SECTION", "Transfer completed"],
+    "failure_indicators": ["Transfer failed", "refused"]
+  },
+  "snmp-default-community": {
+    "name": "SNMP Default Community Strings",
+    "description": "Checks for default SNMP community strings",
+    "severity": "HIGH",
+    "ports": [161],
+    "category": "snmp",
+    "payloads": {
+      "communities": ["public", "private", "admin"]
+    },
+    "success_indicators": ["GetResponse", "community"],
+    "failure_indicators": ["No response", "Timeout"]
+  },
+  "rdp-bluekeep": {
+    "name": "RDP BlueKeep Vulnerability",
+    "description": "Checks for CVE-2019-0708 BlueKeep vulnerability",
+    "severity": "CRITICAL",
+    "ports": [3389],
+    "category": "rdp",
+    "payloads": {
+      "check_method": "banner_analysis"
+    },
+    "success_indicators": ["RDP", "Terminal"],
+    "failure_indicators": ["Connection refused"]
+  },
+  "vnc-auth": {
+    "name": "VNC Authentication",
+    "description": "Checks VNC authentication methods",
+    "severity": "MEDIUM",
+    "ports": [5900, 5901, 5902],
+    "category": "vnc",
+    "payloads": {
+      "check_method": "handshake"
+    },
+    "success_indicators": ["RFB", "VNC"],
+    "failure_indicators": ["Connection refused"]
+  },
+  "mongodb-unauth": {
+    "name": "MongoDB Unauthorized Access",
+    "description": "Checks for unauthorized MongoDB access",
+    "severity": "HIGH",
+    "ports": [27017, 27018],
+    "category": "database",
+    "payloads": {
+      "check_method": "connect"
+    },
+    "success_indicators": ["MongoDB", "db version"],
+    "failure_indicators": ["Connection refused", "Authentication required"]
+  },
+  "redis-unauth": {
+    "name": "Redis Unauthorized Access",
+    "description": "Checks for unauthorized Redis access",
+    "severity": "HIGH",
+    "ports": [6379],
+    "category": "database",
+    "payloads": {
+      "command": "INFO"
+    },
+    "success_indicators": ["redis_version", "PONG"],
+    "failure_indicators": ["Connection refused", "NOAUTH"]
+  },
+  "elasticsearch-unauth": {
+    "name": "Elasticsearch Unauthorized Access",
+    "description": "Checks for unauthorized Elasticsearch access",
+    "severity": "HIGH",
+    "ports": [9200, 9300],
+    "category": "database",
+    "payloads": {
+      "path": "/_cluster/health"
+    },
+    "success_indicators": ["cluster_name", "elasticsearch"],
+    "failure_indicators": ["Connection refused", "Unauthorized"]
+  },
+  "memcached-amplification": {
+    "name": "Memcached UDP Amplification",
+    "description": "Checks for Memcached UDP amplification vulnerability",
+    "severity": "HIGH",
+    "ports": [11211],
+    "category": "cache",
+    "payloads": {
+      "command": "stats"
+    },
+    "success_indicators": ["STAT", "version"],
+    "failure_indicators": ["ERROR", "Connection refused"]
+  },
+  "ntp-amplification": {
+    "name": "NTP Amplification Attack",
+    "description": "Checks for NTP amplification vulnerability",
+    "severity": "MEDIUM",
+    "ports": [123],
+    "category": "ntp",
+    "payloads": {
+      "command": "monlist"
+    },
+    "success_indicators": ["NTP", "monlist"],
+    "failure_indicators": ["No response"]
+  },
+  "ldap-anonymous": {
+    "name": "LDAP Anonymous Bind",
+    "description": "Checks for LDAP anonymous bind access",
+    "severity": "MEDIUM",
+    "ports": [389, 636],
+    "category": "ldap",
+    "payloads": {
+      "bind_dn": "",
+      "password": ""
+    },
+    "success_indicators": ["bindResponse", "success"],
+    "failure_indicators": ["invalidCredentials", "Connection refused"]
+  },
+  "cassandra-default": {
+    "name": "Cassandra Default Credentials",
+    "description": "Checks for default Cassandra credentials",
+    "severity": "HIGH",
+    "ports": [7000, 9042],
+    "category": "database",
+    "payloads": {
+      "username": "cassandra",
+      "password": "cassandra"
+    },
+    "success_indicators": ["Connected", "Welcome"],
+    "failure_indicators": ["Authentication failed"]
+  },
+  "docker-api": {
+    "name": "Docker API Exposure",
+    "description": "Checks for exposed Docker API",
+    "severity": "CRITICAL",
+    "ports": [2375, 2376],
+    "category": "containers",
+    "payloads": {
+      "path": "/version"
+    },
+    "success_indicators": ["docker", "ApiVersion"],
+    "failure_indicators": ["Connection refused"]
+  },
+  "kubernetes-api": {
+    "name": "Kubernetes API Exposure",
+    "description": "Checks for exposed Kubernetes API",
+    "severity": "CRITICAL",
+    "ports": [6443, 8080],
+    "category": "containers",
+    "payloads": {
+      "path": "/api/v1"
+    },
+    "success_indicators": ["kubernetes", "APIVersion"],
+    "failure_indicators": ["Unauthorized", "Connection refused"]
+  }
+}
