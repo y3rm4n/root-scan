@@ -1,4 +1,4 @@
-#Update v1.0.4
+#Update v1.0.5
 colorama>=0.4.6
 requests>=2.31.0
 python-nmap>=0.7.1
