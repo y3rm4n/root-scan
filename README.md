@@ -43,11 +43,7 @@ cd root-scan
 ### 2. Automatic Setup
 
 ```bash
-# Run setup script (recommended)
-chmod +x setup.sh
-./setup.sh
-
-# Or manual installation
+#Manual installation
 pip3 install -r requirements.txt --break-system-packages
 ```
 
